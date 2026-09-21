@@ -10,6 +10,11 @@
 #   - Resolves the Fleet server URL and reads /opt/orbit/identifier
 #   - Builds the step list from STEPS (by title name or title ID) or, if
 #     AUTO_DISCOVER=true, from every self-service title available to the host
+#   - If fleetd did not unpack swiftDialog (typical after MDM
+#     InstallEnterpriseApplication — orbit skips that TUF target unless
+#     setup experience or MDM migration is running), downloads only
+#     Fleet's swiftDialog TUF target into the same orbit path. Does not
+#     reinstall fleetd.
 #   - Opens the Fleet Interlude swiftDialog window, styled like Fleet's
 #     native setup-experience page (Process / Status table).
 #     BLUR_SCREEN=true kiosks with a blur; false (or --no-blur) is a
@@ -113,7 +118,11 @@ RESOLVED_APPEARANCE="light"
 FLEET_URL=""
 
 TOKEN_FILE="/opt/orbit/identifier"
-DIALOG_BIN="/opt/orbit/bin/swiftDialog/macos/stable/Dialog.app/Contents/MacOS/Dialog"
+DIALOG_DIR="/opt/orbit/bin/swiftDialog/macos/stable"
+DIALOG_BIN="${DIALOG_DIR}/Dialog.app/Contents/MacOS/Dialog"
+# Same artifact orbit would unpack from Fleet's update CDN. Only this
+# target — not orbit, osqueryd, or Fleet Desktop.
+SWIFT_DIALOG_TUF_URL="https://updates.fleetdm.com/targets/swiftDialog/macos/stable/swiftDialog.app.tar.gz"
 
 # If STEPS is empty and AUTO_DISCOVER=true, queue every self-service title
 # available to this host. AUTO_DISCOVER is ignored when STEPS is non-empty.
@@ -124,10 +133,7 @@ AUTO_DISCOVER="false"
 # With SERIAL_STEPS=true this list is the dependency chain: step N+1 is not
 # queued until step N succeeds (or is skipped, see SERIAL_ON_FAIL).
 STEPS=(
-    "Okta Verify"
     "Google Chrome"
-    "Zoom"
-    "GitHub Desktop"
     "Claude"
     "Fleet Desktop"
     "some_pig.sh"
@@ -149,12 +155,15 @@ SERIAL_ON_FAIL="stop"
 # Fallback for script-only titles when an older Fleet device-software response
 # omits both the package filename and source="scripts".
 SCRIPT_ONLY_TITLES=(
-    "Some pig"
+    "some_pig.sh"
 )
 
 POLL_INTERVAL_SECONDS=8
 MAX_WAIT_SECONDS=3600
 WAIT_FOR_CONSOLE_SECONDS=120
+# Manual MDM enroll does not unpack swiftDialog. Do not sit here hoping
+# orbit will; TUF install starts immediately so the window can open.
+WAIT_FOR_DIALOG_SECONDS=0
 COMPLETE_HOLD_SECONDS=20
 
 # Window copy — Fleet native "Setting up your device" screen.
@@ -209,6 +218,81 @@ read_token() {
         return 1
     fi
     /usr/bin/tr -d '[:space:]' < "$TOKEN_FILE"
+}
+
+install_swift_dialog_from_tuf() {
+    local tmpdir="" archive="" extracted=""
+    tmpdir=$(/usr/bin/mktemp -d /private/var/tmp/fleet-interlude-dialog.XXXXXX) || return 1
+    archive="${tmpdir}/swiftDialog.app.tar.gz"
+
+    log INFO "Downloading swiftDialog TUF target from ${SWIFT_DIALOG_TUF_URL}"
+    if ! /usr/bin/curl --fail --location --silent --show-error \
+        --retry 3 --retry-delay 2 --max-time 120 \
+        --output "$archive" "$SWIFT_DIALOG_TUF_URL"; then
+        log ERROR "Failed to download swiftDialog from Fleet TUF"
+        /bin/rm -rf "$tmpdir"
+        return 1
+    fi
+
+    if ! /usr/bin/tar -xzf "$archive" -C "$tmpdir"; then
+        log ERROR "Failed to extract swiftDialog TUF archive"
+        /bin/rm -rf "$tmpdir"
+        return 1
+    fi
+
+    if [[ -d "${tmpdir}/Dialog.app" ]]; then
+        extracted="${tmpdir}/Dialog.app"
+    else
+        extracted=$(/usr/bin/find "$tmpdir" -name 'Dialog.app' -type d | /usr/bin/head -n 1)
+    fi
+    if [[ -z "$extracted" || ! -d "$extracted" ]]; then
+        log ERROR "TUF archive did not contain Dialog.app"
+        /bin/rm -rf "$tmpdir"
+        return 1
+    fi
+
+    /bin/mkdir -p "$DIALOG_DIR"
+    if [[ -e "${DIALOG_DIR}/Dialog.app" ]]; then
+        /bin/rm -rf "${DIALOG_DIR}/Dialog.app"
+    fi
+    if ! /usr/bin/ditto "$extracted" "${DIALOG_DIR}/Dialog.app"; then
+        log ERROR "Failed to install Dialog.app into ${DIALOG_DIR}"
+        /bin/rm -rf "$tmpdir"
+        return 1
+    fi
+    /usr/bin/xattr -dr com.apple.quarantine "${DIALOG_DIR}/Dialog.app" 2>/dev/null || true
+    /bin/chmod -R a+rX "${DIALOG_DIR}/Dialog.app"
+    if [[ -f "$DIALOG_BIN" ]]; then
+        /bin/chmod a+x "$DIALOG_BIN"
+    fi
+    /bin/rm -rf "$tmpdir"
+
+    if [[ ! -x "$DIALOG_BIN" ]]; then
+        log ERROR "swiftDialog extracted but not executable at ${DIALOG_BIN}"
+        return 1
+    fi
+    log INFO "Installed fleetd swiftDialog from TUF at ${DIALOG_BIN}"
+    return 0
+}
+
+ensure_dialog() {
+    local elapsed=0
+    if [[ -x "$DIALOG_BIN" ]]; then
+        return 0
+    fi
+    if [[ $WAIT_FOR_DIALOG_SECONDS -gt 0 ]]; then
+        log INFO "Waiting up to ${WAIT_FOR_DIALOG_SECONDS}s for fleetd swiftDialog at ${DIALOG_BIN}"
+        while [[ $elapsed -lt $WAIT_FOR_DIALOG_SECONDS ]]; do
+            sleep 5
+            elapsed=$((elapsed + 5))
+            if [[ -x "$DIALOG_BIN" ]]; then
+                log INFO "fleetd swiftDialog ready after ${elapsed}s"
+                return 0
+            fi
+        done
+    fi
+    log INFO "fleetd did not unpack swiftDialog; installing from Fleet TUF"
+    install_swift_dialog_from_tuf
 }
 
 discover_fleet_url() {
@@ -643,19 +727,21 @@ download_title_icon() {
 
 resolve_step_icon() {
     local id="$1" name="$2" api_icon="$3"
-    local png="${ICON_DIR}/${id}.png" app
+    local png="${ICON_DIR}/${id}.png" app abs_icon
     ICON_SAVED=""
     if app=$(find_application "${FOUND_BUNDLE:-}" "${FOUND_PATHS:-}") && export_app_icon_png "$app" "$png"; then
         printf 'file://%s' "$png"
         return 0
     fi
-    if [[ "$api_icon" == https://* || "$api_icon" == http://* ]]; then
-        if download_http_icon "$api_icon" "$png"; then
+    abs_icon="$api_icon"
+    if [[ "$abs_icon" == /* ]]; then
+        abs_icon="${FLEET_URL}${abs_icon}"
+    fi
+    if [[ "$abs_icon" == https://* || "$abs_icon" == http://* ]]; then
+        if download_http_icon "$abs_icon" "$png"; then
             printf 'file://%s' "$ICON_SAVED"
             return 0
         fi
-        printf '%s' "$api_icon"
-        return 0
     fi
     if download_title_icon "$id" "$png"; then
         printf 'file://%s' "$ICON_SAVED"
@@ -1432,8 +1518,8 @@ if ! is_true "$DRY_RUN" && is_true "$DETACH" && [[ "$WORKER_MODE" != "true" ]]; 
     exit 0
 fi
 
-if [[ ! -x "$DIALOG_BIN" ]]; then
-    log ERROR "fleetd swiftDialog not found at ${DIALOG_BIN}"
+if ! ensure_dialog; then
+    log ERROR "swiftDialog is not at ${DIALOG_BIN} and TUF install failed"
     exit 1
 fi
 
@@ -1476,14 +1562,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-###############################################################################
-# Resolve the step list
-###############################################################################
-log INFO "Fetching available software from Fleet..."
-fetch_available_software_tsv
-index_installed_apps
-log INFO "Software catalog: $(/usr/bin/wc -l < "$SOFTWARE_TSV" | /usr/bin/tr -d ' ') title(s)"
-
 STEP_IDS=(); STEP_NAMES=(); STEP_ICONS=(); STEP_STATE=()
 STEP_PACKAGES=(); STEP_SOURCES=(); STEP_BASELINE_INSTALL_KEYS=(); STEP_TRACKED_INSTALL_UUIDS=(); STEP_QUEUED=()
 
@@ -1507,18 +1585,93 @@ add_step() {
     STEP_QUEUED+=("false")
 }
 
+# Paint STEPS immediately so the window does not wait on Fleet's catalog.
+seed_placeholder_steps() {
+    local want
+    if [[ ${#STEPS[@]} -eq 0 ]]; then
+        return 0
+    fi
+    for want in "${STEPS[@]}"; do
+        add_step "pending:${want}" "$want" "" "pending" "" "" ""
+    done
+}
+
+fill_step_from_title() {
+    local i="$1"
+    STEP_IDS[$i]="$FOUND_ID"
+    STEP_NAMES[$i]="$FOUND_NAME"
+    STEP_PACKAGES[$i]="$FOUND_PKG"
+    STEP_SOURCES[$i]="$FOUND_SOURCE"
+    STEP_BASELINE_INSTALL_KEYS[$i]="$FOUND_LAST_INSTALL_KEY"
+    STEP_ICONS[$i]=$(resolve_step_icon "$FOUND_ID" "$FOUND_NAME" "$FOUND_ICON")
+    STEP_STATE[$i]="$(initial_step_state "$FOUND_NAME" "$FOUND_STATUS" "$FOUND_BUNDLE" "$FOUND_PKG" "$FOUND_SOURCE" "$FOUND_PATHS")"
+}
+
+###############################################################################
+# Console user — then open the window before any Fleet API call.
+###############################################################################
+user=$(console_user)
+elapsed=0
+while ! is_human_console_user "$user" && [[ $elapsed -lt $WAIT_FOR_CONSOLE_SECONDS ]]; do
+    log INFO "Waiting for console user (found: '${user:-none}')..."
+    sleep 1
+    elapsed=$((elapsed + 1))
+    user=$(console_user)
+done
+
+dialogsEnabled="true"
+if ! is_human_console_user "$user"; then
+    if is_true "$REQUIRE_CONSOLE_USER"; then
+        log ERROR "No console user logged in and REQUIRE_CONSOLE_USER=true; exiting."
+        exit 2
+    fi
+    log WARN "No console user logged in (found: '${user:-none}') - queueing installs without a dialog."
+    dialogsEnabled="false"
+else
+    log INFO "Console user: ${user}"
+fi
+CONSOLE_USER="$user"
+index_installed_apps
+resolve_color_mode
+log INFO "Window color mode: ${COLOR_MODE} (resolved ${RESOLVED_APPEARANCE})"
+if ! is_true "$BLUR_SCREEN"; then
+    log INFO "Dialog: no blur, resizable, on-top"
+fi
+
 if [[ ${#STEPS[@]} -gt 0 ]]; then
+    seed_placeholder_steps
+    if [[ "$dialogsEnabled" == "true" ]]; then
+        window_copy
+        DIALOG_FINGERPRINT="${CURRENT_TITLE}|${STEP_STATE[*]}|${STEP_ICONS[*]}"
+        launch_dialog
+        log INFO "Fleet Interlude window opened before software catalog"
+    fi
+fi
+
+###############################################################################
+# Resolve the step list
+###############################################################################
+log INFO "Fetching available software from Fleet..."
+fetch_available_software_tsv
+index_installed_apps
+log INFO "Software catalog: $(/usr/bin/wc -l < "$SOFTWARE_TSV" | /usr/bin/tr -d ' ') title(s)"
+
+if [[ ${#STEPS[@]} -gt 0 ]]; then
+    i=0
     for want in "${STEPS[@]}"; do
         if ! lookup_title "$want"; then
-            log WARN "No available software titled '${want}' for this host; skipping"
+            log WARN "No available software titled '${want}' for this host"
+            STEP_STATE[$i]="fail"
+            i=$((i + 1))
             continue
         fi
         if [[ "$FOUND_SS" != "1" ]]; then
-            log WARN "Title ${FOUND_NAME} (id ${FOUND_ID}) is not self-service; the device install API will reject it. Skipping."
+            log WARN "Title ${FOUND_NAME} (id ${FOUND_ID}) is not self-service; the device install API will reject it."
+            STEP_STATE[$i]="fail"
+            i=$((i + 1))
             continue
         fi
-        icon=$(resolve_step_icon "$FOUND_ID" "$FOUND_NAME" "$FOUND_ICON")
-        add_step "$FOUND_ID" "$FOUND_NAME" "$icon" "$(initial_step_state "$FOUND_NAME" "$FOUND_STATUS" "$FOUND_BUNDLE" "$FOUND_PKG" "$FOUND_SOURCE" "$FOUND_PATHS")" "$FOUND_PKG" "$FOUND_SOURCE" "$FOUND_LAST_INSTALL_KEY"
+        fill_step_from_title "$i"
         disk_path=$(find_application "$FOUND_BUNDLE" "$FOUND_PATHS" || true)
         if is_script_software "$FOUND_PKG" "$FOUND_SOURCE" "$FOUND_NAME"; then
             log INFO "Step: ${FOUND_NAME} (title_id=${FOUND_ID}, fleet_status=${FOUND_STATUS:-none}, kind=script source=${FOUND_SOURCE:-none}, package=${FOUND_PKG:-none}, baseline_install_key=${FOUND_LAST_INSTALL_KEY:-none})"
@@ -1527,9 +1680,10 @@ if [[ ${#STEPS[@]} -gt 0 ]]; then
         else
             log INFO "Step: ${FOUND_NAME} (title_id=${FOUND_ID}, fleet_status=${FOUND_STATUS:-none}, on_disk=${disk_path:-no})"
         fi
-        if [[ -z "$icon" ]]; then
+        if [[ -z "${STEP_ICONS[$i]}" ]]; then
             log WARN "No icon for ${FOUND_NAME}; using letter placeholder"
         fi
+        i=$((i + 1))
     done
 elif is_true "$AUTO_DISCOVER"; then
     while IFS=$'\x1f' read -r id name ss status icon bundle pkg source lastkey paths; do
@@ -1556,37 +1710,11 @@ if [[ ${#STEP_IDS[@]} -eq 0 ]]; then
 fi
 log INFO "${#STEP_IDS[@]} step(s) in Fleet Interlude"
 
-###############################################################################
-# Console user / dialog
-###############################################################################
-user=$(console_user)
-elapsed=0
-while ! is_human_console_user "$user" && [[ $elapsed -lt $WAIT_FOR_CONSOLE_SECONDS ]]; do
-    log INFO "Waiting for console user (found: '${user:-none}')..."
-    sleep 5
-    elapsed=$((elapsed + 5))
-    user=$(console_user)
-done
-
-dialogsEnabled="true"
-if ! is_human_console_user "$user"; then
-    if is_true "$REQUIRE_CONSOLE_USER"; then
-        log ERROR "No console user logged in and REQUIRE_CONSOLE_USER=true; exiting."
-        exit 2
-    fi
-    log WARN "No console user logged in (found: '${user:-none}') - queueing installs without a dialog."
-    dialogsEnabled="false"
-else
-    log INFO "Console user: ${user}"
-fi
-CONSOLE_USER="$user"
-index_installed_apps
-
 # ~/Applications is only indexed after we know the console user. Re-check
 # skip-queue so we do not reinstall something already in the user folder.
 i=0
 while [[ $i -lt ${#STEP_IDS[@]} ]]; do
-    if [[ "${STEP_STATE[$i]}" != "success" ]] && lookup_title "${STEP_IDS[$i]}"; then
+    if [[ "${STEP_STATE[$i]}" != "success" && "${STEP_STATE[$i]}" != "fail" ]] && lookup_title "${STEP_IDS[$i]}"; then
         if ! is_script_software "${STEP_PACKAGES[$i]}" "${STEP_SOURCES[$i]}" "${STEP_NAMES[$i]}" && \
                 disk_path=$(find_application "$FOUND_BUNDLE" "$FOUND_PATHS"); then
             log INFO "On disk after console-user index: ${STEP_NAMES[$i]} (${disk_path})"
@@ -1596,19 +1724,25 @@ while [[ $i -lt ${#STEP_IDS[@]} ]]; do
     i=$((i + 1))
 done
 
-resolve_color_mode
-log INFO "Window color mode: ${COLOR_MODE} (resolved ${RESOLVED_APPEARANCE})"
-if ! is_true "$BLUR_SCREEN"; then
-    log INFO "Dialog: no blur, resizable, on-top"
+if [[ "$dialogsEnabled" == "true" && -z "${DIALOG_PID:-}" ]]; then
+    window_copy
+    DIALOG_FINGERPRINT="${CURRENT_TITLE}|${STEP_STATE[*]}|${STEP_ICONS[*]}"
+    launch_dialog
 fi
+refresh_dialog
 
 ###############################################################################
-# Queue installs before the window so the first paint is Installing, not Pending.
-# Reloading --webcontent kills the CSS spinner; we only reload when a row finishes.
-# SERIAL_STEPS=true queues only the next unfinished title; later titles wait.
+# Queue installs. The window is already open (placeholder STEPS) so this
+# only updates status. SERIAL_STEPS=true queues one unfinished title at a time.
 ###############################################################################
 queue_title() {
     local id="$1" name="$2" http
+    case "$id" in
+        ''|*[!0-9]*)
+            log WARN "Queue ${name}: skip non-numeric title id '${id}'"
+            return 1
+            ;;
+    esac
     if is_true "$DRY_RUN"; then
         log INFO "[DRY-RUN] Would POST software/install/${id} (${name})"
         return 0
@@ -1727,7 +1861,7 @@ if is_true "$SERIAL_STEPS"; then
 else
     i=0
     while [[ $i -lt ${#STEP_IDS[@]} ]]; do
-        if [[ "${STEP_STATE[$i]}" == "success" ]]; then
+        if [[ "${STEP_STATE[$i]}" == "success" || "${STEP_STATE[$i]}" == "fail" ]]; then
             i=$((i + 1))
             continue
         fi
@@ -1740,11 +1874,7 @@ else
     done
 fi
 
-if [[ "$dialogsEnabled" == "true" ]]; then
-    window_copy
-    DIALOG_FINGERPRINT="${CURRENT_TITLE}|${STEP_STATE[*]}|${STEP_ICONS[*]}"
-    launch_dialog
-fi
+refresh_dialog
 
 ###############################################################################
 # Poll until terminal or timeout

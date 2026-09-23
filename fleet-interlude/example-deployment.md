@@ -1,8 +1,18 @@
 # Example deployment
 
-This is one working way to run Fleet Interlude in production for BYOD hosts. 
+This is one working example of how to run Interlude in production. 
+
+## Goal
+| User story  |
+|:---------------------------------------------------------------------------|
+| As an IT admin,
+| I want to run a specific set of Fleet policies (in order) on manually-enrolled (BYOD) macOS hosts, immediately after enrollment, before anything else
+| so that I can validate new BYOD enrollments meet a standardized, base-level configuration before they are transferred to our production fleet.
+
 
 ## Overview
+
+We can use a "staging" fleet as a waiting room for newly-enrolled BYOD hosts. Newly-enrolled BYOD hosts will need to meet certain criteria before being promoted to the production fleet. Interlude will be used to make sure this process is efficient and standardized.
 
 ## Steps
 

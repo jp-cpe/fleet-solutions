@@ -134,7 +134,6 @@ AUTO_DISCOVER="false"
 # queued until step N succeeds (or is skipped, see SERIAL_ON_FAIL).
 STEPS=(
     "Google Chrome"
-    "Claude"
     "Fleet Desktop"
     "some_pig.sh"
 )

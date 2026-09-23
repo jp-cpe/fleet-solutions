@@ -4,7 +4,9 @@ A post-login setup tracker for newly enrolled Macs. Fleet Interlude opens a swif
 
 It does not replace Fleet's native setup experience, and it can only install titles marked self-service.
 
-> **NOTE**: This is a community project, not an official tool that Fleet supports.
+> **NOTE**: This is a community project, not officially supported by Fleet. 
+> 
+> For an example deployment, see [Example deployment](example-deployment.md).
 
 ## How it works
 
@@ -15,21 +17,11 @@ It does not replace Fleet's native setup experience, and it can only install tit
 5. Polls `GET /api/latest/fleet/device/{token}/software` and the local filesystem, updating the window until each step finishes or `MAX_WAIT_SECONDS` runs out.
 6. Writes `/var/db/fleet-interlude.done` as a sentinel.
 
-
-
-## Requirements
-
-- macOS host enrolling in Fleet.
-- Every title in `STEPS` is available as self-service to the host.
-- The script runs as root, which fleetd already does.
-
-
-
 ## Security
 
 Fleet Interlude authenticates with the host's Fleet Desktop device token, not a Fleet API token, so the script holds no admin credentials.
 
-- **The token rotates.** orbit generates a random UUID, registers it with Fleet over orbit's own authenticated channel, and writes it to `/opt/orbit/identifier`. orbit replaces it every hour, and Fleet rejects any token older than one hour. The script reads the file before every request and retries once after a `401` or `403`, so a rotation mid-run doesn't break it. The token is never written to the logs. See [Secure Fleet Desktop](https://fleetdm.com/guides/fleet-desktop#secure-fleet-desktop).
+- **The token rotates.** orbit generates a random UUID, registers it with Fleet over orbit's own authenticated channel, and writes it to `/opt/orbit/identifier` on the host. orbit replaces it every hour, and Fleet rejects any token older than one hour. The token is never written to the logs. See [Secure Fleet Desktop](https://fleetdm.com/guides/fleet-desktop#secure-fleet-desktop).
 - **The token is scoped to one host.** It only authenticates the `/api/latest/fleet/device/{token}/...` routes, and those only act on the host that owns the token: reading that host's software, queueing its self-service installs, and reading its install results. Fleet's other API routes require an API token. See [Fleet-desktop-token-authenticated routes](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/reference/api-for-contributors.md#fleet-desktop-token-authenticated-routes).
 - **Installs are limited to self-service titles.** The install endpoint rejects any title that isn't marked `self_service`. See [Install self-service software by Fleet Desktop token](https://fleetdm.com/docs/rest-api/rest-api#install-self-service-software-by-fleet-desktop-token).
 
@@ -42,6 +34,8 @@ Fleet Interlude authenticates with the host's Fleet Desktop device token, not a 
 1. Edit the `CONFIGURATION` block at the top of the script.
 2. Upload the script under **Controls > Scripts**.
 3. Run it manually on a host, or attach it to a policy automation.
+
+> For an example production deployment, see [Example deployment](example-deployment.md).
 
 
 

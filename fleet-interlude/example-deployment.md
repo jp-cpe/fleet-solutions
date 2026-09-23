@@ -12,7 +12,7 @@ This is one working example of how to run Interlude in production.
 
 ## Overview
 
-We can use a "staging" fleet as a waiting room for newly-enrolled BYOD hosts. Newly-enrolled BYOD hosts will need to meet certain criteria before being promoted to the production fleet. Interlude will be used to make sure this process is efficient and standardized.
+We can use a "staging" fleet as a waiting room for newly-enrolled BYOD hosts. Newly-enrolled BYOD hosts will need to meet certain criteria before being promoted to the "production" fleet. Interlude will be used to make sure this process is efficient and standardized.
 
 ## Steps
 

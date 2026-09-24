@@ -88,7 +88,7 @@ DETACH="true"
 
 # Re-run even if /var/db/fleet-interlude.done exists.
 # Also accepted as --force on the command line.
-FORCE="true"
+FORCE="false"
 
 # TEMPORARY: emit sanitized script-install diagnostics: Fleet status, install
 # UUIDs, and result endpoint status. Set false after troubleshooting. Also

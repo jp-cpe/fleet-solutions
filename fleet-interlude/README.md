@@ -2,9 +2,11 @@
 
 Interlude gives manually enrolled Macs, such as BYOD, contractor, or MDM-migration hosts, a bootstrap step and a guaranteed install order, neither of which Fleet offers for manual enrollment today ([fleetdm/fleet#46368](https://github.com/fleetdm/fleet/issues/46368), [fleetdm/fleet#29921](https://github.com/fleetdm/fleet/issues/29921)). It installs your chosen self-service titles one at a time, in order, right after enrollment, and shows the user each step's progress.
 
-![Interlude window in dark mode showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/fleet-interlude.jpg)
+![Interlude window in dark mode showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/fleet-interlude.png)
 
 > **NOTE**: This is a community project, not officially supported by Fleet. It is not designed to replace Fleet's native setup experience feature for Macs going through Automated Device Enrollment (ADE).
+
+
 
 ## How it works
 
@@ -15,16 +17,22 @@ Interlude gives manually enrolled Macs, such as BYOD, contractor, or MDM-migrati
 5. Polls `GET /api/latest/fleet/device/{token}/software` and the local filesystem, updating the window until each step finishes or `MAX_WAIT_SECONDS` runs out.
 6. If every step succeeds, writes `/var/db/fleet-interlude.done` as a sentinel. A run with a failed or unfinished step doesn't write it.
 
+
+
 ## Security
 
 Interlude authenticates with the host's Fleet device token, not a Fleet API token, so the script holds no admin credentials.
 
-- **It doesn't need Fleet Desktop.** orbit creates and rotates the device token whether or not Fleet Desktop is enabled, so Interlude works on hosts without it.
 - **The token rotates.** orbit generates a random UUID, registers it with Fleet over orbit's own authenticated channel, and writes it to `/opt/orbit/identifier` on the host. orbit replaces it every hour, and Fleet rejects any token older than one hour. The token is never written to the logs. See [Secure Fleet Desktop](https://fleetdm.com/guides/fleet-desktop#secure-fleet-desktop).
+
+> **NOTE:** **Fleet Desktop is not required.** orbit creates and rotates the device token whether or not Fleet Desktop is enabled, so Interlude works on hosts without it.
+
 - **The token is scoped to one host.** It only authenticates the `/api/latest/fleet/device/{token}/...` routes, and those only act on the host that owns the token: reading that host's software, queueing its self-service installs, and reading its install results. See [Fleet-desktop-token-authenticated routes](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/reference/api-for-contributors.md#fleet-desktop-token-authenticated-routes).
 - **Installs are limited to self-service titles.** The install endpoint rejects any title that isn't marked `self_service`. See [Install self-service software by Fleet Desktop token](https://fleetdm.com/docs/rest-api/rest-api#install-self-service-software-by-fleet-desktop-token).
 
-> **Fleet Desktop SSO (`fleet_desktop.sso_enabled`)**: When this Fleet Premium setting is on, the device routes Interlude uses require an SSO session, and they're only exempt during ADE setup experience. Expect Fleet to reject Interlude's requests with HTTP 401. This hasn't been tested. Requiring IdP sign-in on the enrollment link is a separate setting and doesn't affect Interlude. See the [Fleet-desktop-token-authenticated routes reference](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/reference/api-for-contributors.md#fleet-desktop-token-authenticated-routes).
+> **Fleet Desktop SSO (**`fleet_desktop.sso_enabled`**)**: When this Fleet Premium setting is on, the device routes Interlude uses require an SSO session, and they're only exempt during ADE setup experience. Expect Fleet to reject Interlude's requests with HTTP 401. This hasn't been tested. Requiring IdP sign-in on the enrollment link is a separate setting and doesn't affect Interlude. See the [Fleet-desktop-token-authenticated routes reference](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/reference/api-for-contributors.md#fleet-desktop-token-authenticated-routes).
+
+
 
 ## Deploy
 
@@ -38,24 +46,28 @@ If you manage Fleet with GitOps, add the script under `controls.scripts` and set
 
 > For an example production deployment, including the GitOps YAML, see [Example deployment](example-deployment.md).
 
+
+
 ## Configuration
 
-| Variable                   | Default      | Purpose                                                                            |
-| -------------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| `STEPS`                    | example list | Titles to install, by name or ID. Use an ID when two titles share a name.          |
-| `AUTO_DISCOVER`            | `false`      | If `STEPS` is empty, install every available self-service title.                   |
-| `SERIAL_STEPS`             | `true`       | Queue one title at a time, in `STEPS` order.                                       |
-| `SERIAL_ON_FAIL`           | `stop`       | In serial mode, `stop` or `skip` after a step fails.                               |
-| `DRY_RUN`                  | `false`      | `true` logs what would be queued without installing.                               |
-| `DETACH`                   | `true`       | Hand off live runs to a one-shot LaunchDaemon (see Timing).                        |
+
+| Variable                   | Default      | Purpose                                                                                        |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------------------------- |
+| `STEPS`                    | example list | Titles to install, by name or ID. Use an ID when two titles share a name.                      |
+| `AUTO_DISCOVER`            | `false`      | If `STEPS` is empty, install every available self-service title.                               |
+| `SERIAL_STEPS`             | `true`       | Queue one title at a time, in `STEPS` order.                                                   |
+| `SERIAL_ON_FAIL`           | `stop`       | In serial mode, `stop` or `skip` after a step fails.                                           |
+| `DRY_RUN`                  | `false`      | `true` logs what would be queued without installing.                                           |
+| `DETACH`                   | `true`       | Hand off live runs to a one-shot LaunchDaemon (see Timing).                                    |
 | `BLUR_SCREEN`              | `false`      | `false` shows a resizable window that stays on top. `true` is a full-screen kiosk with a blur. |
-| `COLOR_MODE`               | `auto`       | `light`, `dark`, or `auto` (follows the user's macOS appearance).                  |
-| `WAIT_FOR_CONSOLE_SECONDS` | `120`        | How long to wait for someone to log in. After that, installs are queued without a window. |
-| `REQUIRE_CONSOLE_USER`     | `false`      | Exit with code 2 instead if nobody logs in within `WAIT_FOR_CONSOLE_SECONDS`.      |
-| `POLL_INTERVAL_SECONDS`    | `8`          | How often to check Fleet and the disk for install progress.                        |
-| `MAX_WAIT_SECONDS`         | `3600`       | Overall install timeout.                                                           |
-| `HEADER_LOGO_URL`          | Fleet mark   | HTTPS logo above the tracker. Leave empty to hide it.                              |
-| `FLEET_URL`                | empty        | Overrides the Fleet server URL the script detects.                                 |
+| `COLOR_MODE`               | `auto`       | `light`, `dark`, or `auto` (follows the user's macOS appearance).                              |
+| `WAIT_FOR_CONSOLE_SECONDS` | `120`        | How long to wait for someone to log in. After that, installs are queued without a window.      |
+| `REQUIRE_CONSOLE_USER`     | `false`      | Exit with code 2 instead if nobody logs in within `WAIT_FOR_CONSOLE_SECONDS`.                  |
+| `POLL_INTERVAL_SECONDS`    | `8`          | How often to check Fleet and the disk for install progress.                                    |
+| `MAX_WAIT_SECONDS`         | `3600`       | Overall install timeout.                                                                       |
+| `HEADER_LOGO_URL`          | Fleet mark   | HTTPS logo above the tracker. Leave empty to hide it.                                          |
+| `FLEET_URL`                | empty        | Overrides the Fleet server URL the script detects.                                             |
+
 
 The `WINDOW_TITLE_*` and `WINDOW_MESSAGE_*` variables set the window text.
 
@@ -69,6 +81,8 @@ These flags only apply when you run the script by hand, for example `sudo ./flee
 - `--serial` / `--parallel`: override `SERIAL_STEPS`.
 - `--serial-on-fail stop|skip`: override `SERIAL_ON_FAIL`.
 - `--color-mode light|dark|auto` (or `--light`, `--dark`, `--auto`): override `COLOR_MODE`.
+
+
 
 ## Quitting the window
 
@@ -87,11 +101,15 @@ If you set `DETACH=false`, you may experience timeout errors. To get around this
 - The in-process run logs to stdout, which shows under **Host details > Activity** in Fleet.
 - The detached worker logs to `/var/log/fleet-interlude.log`.
 
+
 | Code | Meaning                                                                      |
 | ---- | ---------------------------------------------------------------------------- |
 | `0`  | Success, including "already completed" and dry runs.                         |
 | `1`  | Misconfiguration, not root, missing token, URL, or swiftDialog, or no steps. |
 | `2`  | `REQUIRE_CONSOLE_USER=true` and no user is logged in.                        |
+
+
+
 
 ## Re-running and retries
 

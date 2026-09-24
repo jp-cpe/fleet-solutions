@@ -71,6 +71,9 @@ These flags only apply when you run the script by hand, for example `sudo ./flee
 - `--serial-on-fail stop|skip`: override `SERIAL_ON_FAIL`.
 - `--color-mode light|dark|auto` (or `--light`, `--dark`, `--auto`): override `COLOR_MODE`.
 
+## Quitting the window
+
+Press **Command + ]** to quit Interlude, including in kiosk mode. This only closes the window: queued installs keep running, the window doesn't reopen, and the done marker is still written when the run finishes.
 
 
 ## Timing

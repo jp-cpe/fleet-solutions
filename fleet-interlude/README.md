@@ -2,7 +2,7 @@
 
 A post-login setup tracker designed for non-ADE Macs enrolling into Fleet. 
 
-![Fleet Interlude window showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/fleet-interlude.jpg)
+![Fleet Interlude window in dark mode showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/fleet-interlude.jpg)
 
 > **NOTE**: This is a community project, not officially supported by Fleet. It is not designed to replace Fleet's native setup experience feature for Macs going through Automated Device Enrollment (ADE).
 
@@ -77,7 +77,7 @@ These flags only apply when you run the script by hand, for example `sudo ./flee
 
 Installing several titles usually takes longer than Fleet's default 300-second script timeout. With `DETACH=true`, live runs copy the script to `/var/db/fleet-interlude/` and continue under the LaunchDaemon `com.fleet.interlude`, so Fleet records the script as successful while installs keep going. 
 
-If you set `DETACH=false`, you may experience timeout errors. You can [raise the default script execution timeout](https://fleetdm.com/docs/configuration/agent-configuration#script-execution-timeout) (`agent_options.script_execution_timeout`) to get around this, just be aware of the consequences of raising your script execution timeout.
+If you set `DETACH=false`, you may experience timeout errors. To get around this you can [raise the default script execution timeout](https://fleetdm.com/docs/configuration/agent-configuration#script-execution-timeout) (`agent_options.script_execution_timeout`).
 
 ## Logs and exit codes
 

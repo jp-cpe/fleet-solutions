@@ -30,23 +30,23 @@ The staging fleet does three jobs:
 
 1. Create a new fleet named `Manual enrollment staging`.
 2. In that fleet, add a self-service software title for each item you want Interlude to install. Custom packages, script-only packages, Fleet-maintained apps, and App Store (VPP) apps all work.
-3. Customize `fleet-interlude.sh` to your needs. At minimum, set `STEPS` to your title names in the order you want them installed.
-4. Upload `fleet-interlude.sh` to the staging fleet under **Controls > Scripts**.
-5. Create a policy in the staging fleet named **macOS - Fleet Interlude complete** that fails until the sentinel exists. Set its run-script automation to `fleet-interlude.sh`. A new host fails this policy on its first check-in, which is what starts Interlude.
+3. Customize `interlude.sh` to your needs. At minimum, set `STEPS` to your title names in the order you want them installed.
+4. Upload `interlude.sh` to the staging fleet under **Controls > Scripts**.
+5. Create a policy in the staging fleet named **macOS - Interlude complete** that fails until the sentinel exists. Set its run-script automation to `interlude.sh`. A new host fails this policy on its first check-in, which is what starts Interlude.
   ```sql
-    SELECT 1 FROM file WHERE path = '/var/db/fleet-interlude.done';
+    SELECT 1 FROM file WHERE path = '/var/db/interlude.done';
   ```
-6. Create a policy in the staging fleet named **macOS - Fleet Interlude verified** that passes only when the sentinel and every title you intended to install are present. Each `EXISTS` below maps to one `STEPS` entry. The last one checks a file that the example script-only package writes.
+6. Create a policy in the staging fleet named **macOS - Interlude verified** that passes only when the sentinel and every title you intended to install are present. Each `EXISTS` below maps to one `STEPS` entry. The last one checks a file that the example script-only package writes.
   ```sql
     SELECT 1 WHERE
-      EXISTS (SELECT 1 FROM file WHERE path = '/var/db/fleet-interlude.done')
+      EXISTS (SELECT 1 FROM file WHERE path = '/var/db/interlude.done')
       AND EXISTS (SELECT 1 FROM apps WHERE bundle_identifier = 'com.google.Chrome')
       AND EXISTS (SELECT 1 FROM file WHERE path = '/Applications/Fleet Desktop.app')
       AND EXISTS (SELECT 1 FROM file WHERE path = '/var/db/some-pig.ran');
   ```
 7. Keep **all other policies, automations, and software** out of the staging fleet unless Interlude needs them.
 8. Hand out only the staging fleet's enrollment link for manual enrollments.
-9. Once a host passes **macOS - Fleet Interlude verified**, transfer it to your production fleet.
+9. Once a host passes **macOS - Interlude verified**, transfer it to your production fleet.
 
 > *Optional*: Use Tines or another automation platform to [transfer verified hosts to your production fleet](https://fleetdm.com/docs/rest-api/rest-api#update-hosts-fleet) and surface failures in Slack.
 
@@ -60,10 +60,10 @@ The same deployment in Fleet GitOps. Paths are relative to the file they appear 
 # fleets/manual-enrollment-staging.yml
 name: Manual enrollment staging
 policies:
-  - path: ../lib/macos/policies/fleet-interlude.yml
+  - path: ../lib/macos/policies/interlude.yml
 controls:
   scripts:
-    - path: ../lib/macos/scripts/fleet-interlude.sh
+    - path: ../lib/macos/scripts/interlude.sh
 software:
   fleet_maintained_apps:
     - slug: google-chrome/darwin
@@ -75,22 +75,22 @@ software:
 ```
 
 ```yaml
-# lib/macos/policies/fleet-interlude.yml
-- name: macOS - Fleet Interlude complete
+# lib/macos/policies/interlude.yml
+- name: macOS - Interlude complete
   platform: darwin
-  description: Fails until Fleet Interlude has finished installing baseline software on this host.
-  resolution: Fleet runs fleet-interlude.sh automatically. If it failed, re-run the script from Host details.
-  query: SELECT 1 FROM file WHERE path = '/var/db/fleet-interlude.done';
+  description: Fails until Interlude has finished installing baseline software on this host.
+  resolution: Fleet runs interlude.sh automatically. If it failed, re-run the script from Host details.
+  query: SELECT 1 FROM file WHERE path = '/var/db/interlude.done';
   run_script:
-    path: ../scripts/fleet-interlude.sh
+    path: ../scripts/interlude.sh
 
-- name: macOS - Fleet Interlude verified
+- name: macOS - Interlude verified
   platform: darwin
   description: Passes when Interlude finished and every baseline title is installed. Hosts that pass can move to production.
-  resolution: Check /var/log/fleet-interlude.log on the host.
+  resolution: Check /var/log/interlude.log on the host.
   query: >-
     SELECT 1 WHERE
-      EXISTS (SELECT 1 FROM file WHERE path = '/var/db/fleet-interlude.done')
+      EXISTS (SELECT 1 FROM file WHERE path = '/var/db/interlude.done')
       AND EXISTS (SELECT 1 FROM apps WHERE bundle_identifier = 'com.google.Chrome')
       AND EXISTS (SELECT 1 FROM file WHERE path = '/var/db/some-pig.ran');
 ```

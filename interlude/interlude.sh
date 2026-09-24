@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
-# NAME:            fleet-interlude.sh
-# PURPOSE:         Fleet Interlude — a post-login tracker on newly enrolled
+# NAME:            interlude.sh
+# PURPOSE:         Interlude — a post-login tracker on newly enrolled
 #                  Macs (swiftDialog via fleetd) that queues each software
 #                  step through Fleet's device-authenticated API, using the
 #                  host's rotating Fleet Desktop token.
@@ -15,7 +15,7 @@
 #     setup experience or MDM migration is running), downloads only
 #     Fleet's swiftDialog TUF target into the same orbit path. Does not
 #     reinstall fleetd.
-#   - Opens the Fleet Interlude swiftDialog window, styled like Fleet's
+#   - Opens the Interlude swiftDialog window, styled like Fleet's
 #     native setup-experience page (Process / Status table).
 #     BLUR_SCREEN=true kiosks with a blur; false (or --no-blur) is a
 #     resizable, on-top window.
@@ -32,13 +32,13 @@
 #
 # WHAT THIS SCRIPT DOES *NOT* DO
 #   - Does NOT replace Fleet's ADE Setup Assistant / native setup-experience
-#     page. That UI is owned by fleetd. Fleet Interlude is a post-login tracker.
+#     page. That UI is owned by fleetd. Interlude is a post-login tracker.
 #   - Does NOT install software that is not self-service. The device install
 #     API rejects titles with self_service=false.
 #   - Does NOT raise privileges; fleetd already runs scripts as root.
 #
 # WHERE THIS RUNS
-#   Fleet Interlude is a Fleet script, uploaded under Controls > Scripts.
+#   Interlude is a Fleet script, uploaded under Controls > Scripts.
 #   Run it manually or from a policy automation.
 #   fleetd executes the script as root. swiftDialog is launched into the
 #   console user's GUI session.
@@ -63,7 +63,7 @@
 #
 # LOGGING
 #   In-process: stdout/stderr (Fleet Host details > Activity).
-#   Detached worker: /var/log/fleet-interlude.log
+#   Detached worker: /var/log/interlude.log
 #
 # EXIT CODES
 #   0 - success, including "already completed" and dry-run
@@ -83,10 +83,10 @@ set -euo pipefail
 DRY_RUN="false"
 
 # When live, hand off to a one-shot LaunchDaemon so Fleet's script timeout
-# cannot kill Fleet Interlude mid-install. Dry-runs always stay in-process.
+# cannot kill Interlude mid-install. Dry-runs always stay in-process.
 DETACH="true"
 
-# Re-run even if /var/db/fleet-interlude.done exists.
+# Re-run even if /var/db/interlude.done exists.
 # Also accepted as --force on the command line.
 FORCE="false"
 
@@ -98,7 +98,7 @@ DEBUG_LOGGING="false"
 # Abort instead of queueing silently when nobody is logged in.
 REQUIRE_CONSOLE_USER="false"
 
-# true: full-screen blur, window cannot be moved or resized (Fleet Interlude kiosk).
+# true: full-screen blur, window cannot be moved or resized (Interlude kiosk).
 # false: no blur, --resizable (implies moveable), still --ontop.
 # Override at run time with --no-blur (Fleet's script runner does not pass flags).
 BLUR_SCREEN="false"
@@ -167,16 +167,16 @@ WINDOW_MESSAGE_DONE="Your computer has been successfully configured. Setup will 
 WINDOW_TITLE_FAILED="Device setup failed"
 WINDOW_MESSAGE_FAILED="Your organization requires that critical software be installed before you use your device. Please reach out to your IT admin for help."
 
-# Header mark shown above the Fleet Interlude tracker. Change this HTTPS URL to use your
+# Header mark shown above the Interlude tracker. Change this HTTPS URL to use your
 # organization's logo, or set it empty to omit the mark.
 HEADER_LOGO_URL="${HEADER_LOGO_URL-https://fleetdm.com/images/permanent/fleet-mark-color-40x40@4x.png}"
 
-DONE_MARK="/var/db/fleet-interlude.done"
-STATE_DIR="/var/db/fleet-interlude"
-WORKER_LABEL="com.fleet.interlude"
+DONE_MARK="/var/db/interlude.done"
+STATE_DIR="/var/db/interlude"
+WORKER_LABEL="com.github.jp-cpe.interlude"
 WORKER_PLIST="/Library/LaunchDaemons/${WORKER_LABEL}.plist"
-WORKER_LOG="/var/log/fleet-interlude.log"
-WORKER_SCRIPT="${STATE_DIR}/fleet-interlude.sh"
+WORKER_LOG="/var/log/interlude.log"
+WORKER_SCRIPT="${STATE_DIR}/interlude.sh"
 
 ###############################################################################
 # LOGGING
@@ -215,7 +215,7 @@ read_token() {
 
 install_swift_dialog_from_tuf() {
     local tmpdir="" archive="" extracted=""
-    tmpdir=$(/usr/bin/mktemp -d /private/var/tmp/fleet-interlude-dialog.XXXXXX) || return 1
+    tmpdir=$(/usr/bin/mktemp -d /private/var/tmp/interlude-dialog.XXXXXX) || return 1
     archive="${tmpdir}/swiftDialog.app.tar.gz"
 
     log INFO "Downloading swiftDialog TUF target from ${SWIFT_DIALOG_TUF_URL}"
@@ -851,7 +851,7 @@ initial_step_state() {
 }
 
 ###############################################################################
-# HTML tracker — Fleet Interlude Process / Status table
+# HTML tracker — Interlude Process / Status table
 ###############################################################################
 status_cell() {
     local st="$1" kind="${2:-app}" label
@@ -1015,7 +1015,7 @@ write_html() {
 <body>
 HDR
         if [[ -n "$HEADER_LOGO_URL" ]]; then
-            printf '<img class="page-corner-logo" src="%s" alt="Fleet Interlude">\n' "$(html_escape "$HEADER_LOGO_URL")"
+            printf '<img class="page-corner-logo" src="%s" alt="Interlude">\n' "$(html_escape "$HEADER_LOGO_URL")"
         fi
         cat <<'HEADER'
 <header class="page-header"></header>
@@ -1358,7 +1358,7 @@ all_terminal() {
 }
 
 ###############################################################################
-# DETACH: one-shot LaunchDaemon so Fleet's 300s timeout cannot kill Fleet Interlude
+# DETACH: one-shot LaunchDaemon so Fleet's 300s timeout cannot kill Interlude
 ###############################################################################
 install_worker() {
     /bin/mkdir -p "$STATE_DIR"
@@ -1494,7 +1494,7 @@ case "$SERIAL_ON_FAIL" in
 esac
 SERIAL_STOPPED="false"
 
-log INFO "Starting fleet-interlude.sh (worker=${WORKER_MODE} dry_run=${DRY_RUN} blur=${BLUR_SCREEN} color_mode=${COLOR_MODE} serial=${SERIAL_STEPS} serial_on_fail=${SERIAL_ON_FAIL} debug=${DEBUG_LOGGING})"
+log INFO "Starting interlude.sh (worker=${WORKER_MODE} dry_run=${DRY_RUN} blur=${BLUR_SCREEN} color_mode=${COLOR_MODE} serial=${SERIAL_STEPS} serial_on_fail=${SERIAL_ON_FAIL} debug=${DEBUG_LOGGING})"
 
 if [[ $EUID -ne 0 ]]; then
     log ERROR "This script must run as root (fleetd)."
@@ -1522,7 +1522,7 @@ log INFO "Fleet URL: ${FLEET_URL}"
 read_token >/dev/null
 log INFO "Device token file: ${TOKEN_FILE}"
 
-WORKDIR=$(/usr/bin/mktemp -d /private/var/tmp/fleet-interlude.XXXXXX)
+WORKDIR=$(/usr/bin/mktemp -d /private/var/tmp/interlude.XXXXXX)
 chmod 755 "$WORKDIR"
 ICON_DIR="${WORKDIR}/icons"
 /bin/mkdir -p "$ICON_DIR"
@@ -1639,7 +1639,7 @@ if [[ ${#STEPS[@]} -gt 0 ]]; then
         window_copy
         DIALOG_FINGERPRINT="${CURRENT_TITLE}|${STEP_STATE[*]}|${STEP_ICONS[*]}"
         launch_dialog
-        log INFO "Fleet Interlude window opened before software catalog"
+        log INFO "Interlude window opened before software catalog"
     fi
 fi
 
@@ -1703,7 +1703,7 @@ if [[ ${#STEP_IDS[@]} -eq 0 ]]; then
     log ERROR "No installable steps resolved. This host has no self-service titles available to install."
     exit 1
 fi
-log INFO "${#STEP_IDS[@]} step(s) in Fleet Interlude"
+log INFO "${#STEP_IDS[@]} step(s) in Interlude"
 
 # ~/Applications is only indexed after we know the console user. Re-check
 # skip-queue so we do not reinstall something already in the user folder.

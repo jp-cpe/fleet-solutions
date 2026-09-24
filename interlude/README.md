@@ -2,7 +2,7 @@
 
 Interlude gives manually enrolled Macs, such as BYOD, contractor, or MDM-migration hosts, a bootstrap step and a guaranteed install order, neither of which Fleet offers for manual enrollment today ([fleetdm/fleet#46368](https://github.com/fleetdm/fleet/issues/46368), [fleetdm/fleet#29921](https://github.com/fleetdm/fleet/issues/29921)). It installs your chosen self-service titles one at a time, in order, right after enrollment, and shows the user each step's progress.
 
-![Interlude window in dark mode showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/fleet-interlude.png)
+![Interlude window in dark mode showing Google Chrome and Fleet Desktop installed and some_pig.sh running](images/interlude.png)
 
 > **NOTE**: This is a community project, not officially supported by Fleet. It is not designed to replace Fleet's native setup experience feature for Macs going through Automated Device Enrollment (ADE).
 
@@ -15,7 +15,7 @@ Interlude gives manually enrolled Macs, such as BYOD, contractor, or MDM-migrati
 3. If swiftDialog isn't on disk (common after a manual MDM enrollment), downloads only Fleet's swiftDialog TUF target into the orbit path. It doesn't reinstall fleetd.
 4. Skips titles that are already installed, then queues the rest with `POST /api/latest/fleet/device/{token}/software/install/{title_id}`.
 5. Polls `GET /api/latest/fleet/device/{token}/software` and the local filesystem, updating the window until each step finishes or `MAX_WAIT_SECONDS` runs out.
-6. If every step succeeds, writes `/var/db/fleet-interlude.done` as a sentinel. A run with a failed or unfinished step doesn't write it.
+6. If every step succeeds, writes `/var/db/interlude.done` as a sentinel. A run with a failed or unfinished step doesn't write it.
 
 
 
@@ -40,7 +40,7 @@ Interlude authenticates with the host's Fleet device token, not a Fleet API toke
 2. Upload the script under **Controls > Scripts**.
 3. Run it manually on a host, or attach it to a policy automation.
 
-Attached to a policy that fails until `/var/db/fleet-interlude.done` exists, Interlude starts on the host's first policy check-in after enrollment. In testing, Interlude was running within two minutes of a completed MDM enrollment.
+Attached to a policy that fails until `/var/db/interlude.done` exists, Interlude starts on the host's first policy check-in after enrollment. In testing, Interlude was running within two minutes of a completed MDM enrollment.
 
 If you manage Fleet with GitOps, add the script under `controls.scripts` and set the policy's `run_script.path` to it.
 
@@ -73,7 +73,7 @@ The `WINDOW_TITLE_*` and `WINDOW_MESSAGE_*` variables set the window text.
 
 ## Command-line flags
 
-These flags only apply when you run the script by hand, for example `sudo ./fleet-interlude.sh --force --no-blur`.
+These flags only apply when you run the script by hand, for example `sudo ./interlude.sh --force --no-blur`.
 
 - `--force`: re-run even if the done marker exists.
 - `--debug`: log extra detail for script-package installs.
@@ -92,14 +92,14 @@ Users can always dismiss the window this way. swiftDialog always has a quit key 
 
 ## Timing
 
-Installing several titles usually takes longer than Fleet's default 300-second script timeout. With `DETACH=true`, live runs copy the script to `/var/db/fleet-interlude/` and continue under the LaunchDaemon `com.fleet.interlude`, so Fleet records the script as successful while installs keep going.
+Installing several titles usually takes longer than Fleet's default 300-second script timeout. With `DETACH=true`, live runs copy the script to `/var/db/interlude/` and continue under the LaunchDaemon `com.github.jp-cpe.interlude`, so Fleet records the script as successful while installs keep going.
 
 If you set `DETACH=false`, you may experience timeout errors. To get around this you can [raise the default script execution timeout](https://fleetdm.com/docs/configuration/agent-configuration#script-execution-timeout) (`agent_options.script_execution_timeout`).
 
 ## Logs and exit codes
 
 - The in-process run logs to stdout, which shows under **Host details > Activity** in Fleet.
-- The detached worker logs to `/var/log/fleet-interlude.log`.
+- The detached worker logs to `/var/log/interlude.log`.
 
 
 | Code | Meaning                                                                      |
@@ -117,4 +117,4 @@ A failed run doesn't retry on its own. Fleet runs a policy's script automation o
 
 Don't turn on `continuous_automations_enabled` for the policy. Each failing policy check would restart Interlude from the beginning.
 
-To re-run a host that already succeeded, delete `/var/db/fleet-interlude.done` or pass `--force`.
+To re-run a host that already succeeded, delete `/var/db/interlude.done` or pass `--force`.

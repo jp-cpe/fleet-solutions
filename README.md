@@ -1,4 +1,4 @@
-# fleet-solutions
+# Fleet solutions
 
 > **NOTE**: This is a community project, not officially supported by Fleet.
 

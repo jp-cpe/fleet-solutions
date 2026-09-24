@@ -1275,19 +1275,20 @@ launch_dialog() {
         --height 780
         --position centre
     )
+    # --title none removes Dialog's title view. WKWebView then eats clicks, so
+    # a fake HTML title bar cannot move the window. A native banner sits above
+    # the webview and isMovableByWindowBackground can drag it. Without the
+    # banner the webview runs to the window's top edge and its header is clipped.
+    if [[ "$RESOLVED_APPEARANCE" == "dark" ]]; then
+        DIALOG_ARGS+=(--bannerimage "colour=#25272d")
+    else
+        DIALOG_ARGS+=(--bannerimage "colour=#f6f7fb")
+    fi
+    DIALOG_ARGS+=(--bannerheight 36)
     if is_true "$BLUR_SCREEN"; then
         DIALOG_ARGS+=(--blurscreen)
     else
-        # --title none removes Dialog's title view. WKWebView then eats clicks, so
-        # a fake HTML title bar cannot move the window. A native banner sits
-        # above the webview and isMovableByWindowBackground can drag it.
         DIALOG_ARGS+=(--resizable --moveable)
-        if [[ "$RESOLVED_APPEARANCE" == "dark" ]]; then
-            DIALOG_ARGS+=(--bannerimage "colour=#25272d")
-        else
-            DIALOG_ARGS+=(--bannerimage "colour=#f6f7fb")
-        fi
-        DIALOG_ARGS+=(--bannerheight 36)
     fi
     set +e
     if is_human_console_user "${CONSOLE_USER:-}"; then

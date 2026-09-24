@@ -32,7 +32,7 @@ Interlude authenticates with the host's Fleet device token, not a Fleet API toke
 2. Upload the script under **Controls > Scripts**.
 3. Run it manually on a host, or attach it to a policy automation.
 
-Attached to a policy that fails until `/var/db/fleet-interlude.done` exists, Interlude starts on the host's first policy check-in after enrollment.
+Attached to a policy that fails until `/var/db/fleet-interlude.done` exists, Interlude starts on the host's first policy check-in after enrollment. In testing, Interlude was running within two minutes of a completed MDM enrollment.
 
 If you manage Fleet with GitOps, add the script under `controls.scripts` and set the policy's `run_script.path` to it.
 

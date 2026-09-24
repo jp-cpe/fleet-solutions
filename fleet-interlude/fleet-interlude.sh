@@ -88,7 +88,7 @@ DETACH="true"
 
 # Re-run even if /var/db/fleet-interlude.done exists.
 # Also accepted as --force on the command line.
-FORCE="false"
+FORCE="true"
 
 # TEMPORARY: emit sanitized script-install diagnostics: Fleet status, install
 # UUIDs, and result endpoint status. Set false after troubleshooting. Also
@@ -101,17 +101,11 @@ REQUIRE_CONSOLE_USER="false"
 # true: full-screen blur, window cannot be moved or resized (Fleet Interlude kiosk).
 # false: no blur, --resizable (implies moveable), still --ontop.
 # Override at run time with --no-blur (Fleet's script runner does not pass flags).
-BLUR_SCREEN="true"
+BLUR_SCREEN="false"
 
-# Color mode for the Fleet Interlude swiftDialog chrome and HTML tracker.
-#   light - force light mode
-#   dark  - force dark mode
-#   auto  - match the console user's macOS Appearance (System Settings)
-# true/false are accepted as aliases for dark/light.
-# Override on the CLI (manual runs): --color-mode dark  |  --dark
-# Fleet does not pass script arguments; the value here is what fleetd uses.
-COLOR_MODE="${COLOR_MODE:-auto}"
-RESOLVED_APPEARANCE="light"
+# Window color mode: light, dark, or auto (follow the user's macOS Appearance).
+# Override at run time with --light, --dark, or --auto.
+COLOR_MODE="auto"
 
 # Leave empty to read FleetURL from the fleetd managed preferences (or the
 # orbit LaunchDaemon). Set only to override.
@@ -1543,6 +1537,7 @@ DIALOG_PID=""
 HTTP_PID=""
 HTTP_URL=""
 CONSOLE_USER=""
+RESOLVED_APPEARANCE="light"
 APPS_INDEX="${WORKDIR}/apps.tsv"
 
 cleanup() {

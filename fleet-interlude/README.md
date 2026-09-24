@@ -19,7 +19,7 @@ A post-login setup tracker designed for non-ADE Macs enrolling into Fleet.
 
 ## Security
 
-Fleet Interlude authenticates with the host's Fleet Desktop device token, not a Fleet API token, so the script holds no admin credentials.
+Fleet Interlude authenticates with the host's Fleet device token, not a Fleet API token, so the script holds no admin credentials.
 
 - **The token rotates.** orbit generates a random UUID, registers it with Fleet over orbit's own authenticated channel, and writes it to `/opt/orbit/identifier` on the host. orbit replaces it every hour, and Fleet rejects any token older than one hour. The token is never written to the logs. See [Secure Fleet Desktop](https://fleetdm.com/guides/fleet-desktop#secure-fleet-desktop).
 - **The token is scoped to one host.** It only authenticates the `/api/latest/fleet/device/{token}/...` routes, and those only act on the host that owns the token: reading that host's software, queueing its self-service installs, and reading its install results. See [Fleet-desktop-token-authenticated routes](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/reference/api-for-contributors.md#fleet-desktop-token-authenticated-routes).
@@ -50,7 +50,7 @@ Fleet Interlude authenticates with the host's Fleet Desktop device token, not a 
 | `SERIAL_ON_FAIL`       | `stop`       | In serial mode, `stop` or `skip` after a step fails.                               |
 | `DRY_RUN`              | `false`      | `true` logs what would be queued without installing.                               |
 | `DETACH`               | `true`       | Hand off live runs to a one-shot LaunchDaemon (see Timing).                        |
-| `BLUR_SCREEN`          | `true`       | Full-screen kiosk with a blur. `false` shows a resizable window that stays on top. |
+| `BLUR_SCREEN`          | `false`      | Full-screen kiosk with a blur. `false` shows a resizable window that stays on top. |
 | `COLOR_MODE`           | `auto`       | `light`, `dark`, or `auto` (follows the user's macOS appearance).                  |
 | `REQUIRE_CONSOLE_USER` | `false`      | Exit with code 2 if nobody is logged in.                                           |
 | `MAX_WAIT_SECONDS`     | `3600`       | Overall install timeout.                                                           |

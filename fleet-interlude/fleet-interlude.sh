@@ -165,7 +165,7 @@ WINDOW_MESSAGE="Your computer is currently being configured by your organization
 WINDOW_TITLE_DONE="Configuration complete"
 WINDOW_MESSAGE_DONE="Your computer has been successfully configured. Setup will continue momentarily."
 WINDOW_TITLE_FAILED="Device setup failed"
-WINDOW_MESSAGE_FAILED="Your organization requires that critical software be installed before you use your device. Restart your device to try again. If this keeps happening, please contact your IT admin."
+WINDOW_MESSAGE_FAILED="Your organization requires that critical software be installed before you use your device. Please reach out to your IT admin for help."
 
 # Header mark shown above the Fleet Interlude tracker. Change this HTTPS URL to use your
 # organization's logo, or set it empty to omit the mark.
